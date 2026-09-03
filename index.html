@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gal's Arcade</title>
+    <meta name="description" content="A shelf of small browser games." />
+    <meta property="og:title" content="Gal's Arcade" />
+    <meta property="og:description" content="A shelf of small browser games." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>&#127918;</text></svg>" />
+    <style>
+      /* Palette lifted from the games' own HUD so the shelf matches what's on it. */
+      :root {
+        color-scheme: dark;
+        --bg: #0c0e12;
+        --card: rgba(255, 255, 255, 0.035);
+        --line: rgba(255, 255, 255, 0.09);
+        --fg: #e6e9ef;
+        --dim: #8b94a5;
+        --accent: #ffce54;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+
+      header {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 56px 24px 32px;
+      }
+
+      h1 {
+        margin: 0;
+        font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      header p {
+        margin: 14px 0 0;
+        max-width: 46ch;
+        color: var(--dim);
+      }
+
+      main {
+        display: grid;
+        gap: 22px;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 24px 64px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        transition: border-color 0.15s, transform 0.15s;
+      }
+
+      .card:hover { border-color: rgba(255, 206, 84, 0.35); transform: translateY(-2px); }
+
+      .card a { text-decoration: none; }
+
+      .shot {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        background: #171b22;
+        border-bottom: 1px solid var(--line);
+      }
+
+      /* No screenshot yet — say so plainly rather than showing a blank box. */
+      .shot--empty {
+        display: grid;
+        place-content: center;
+        gap: 6px;
+        text-align: center;
+        color: #4c5462;
+        font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .body { padding: 18px 20px 20px; }
+
+      h2 {
+        margin: 0;
+        font-size: 17px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        font: 600 9.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border: 1px solid rgba(255, 206, 84, 0.4);
+        border-radius: 4px;
+        padding: 2px 7px;
+      }
+
+      .blurb {
+        margin: 9px 0 18px;
+        color: var(--dim);
+        font-size: 13.5px;
+      }
+
+      .actions { display: flex; align-items: center; gap: 18px; margin: 0; }
+
+      .play {
+        background: var(--accent);
+        color: #0c0e12;
+        font-weight: 650;
+        font-size: 13.5px;
+        padding: 9px 20px;
+        border-radius: 7px;
+        text-decoration: none;
+      }
+
+      .play:hover { background: #ffd977; }
+
+      .src { color: var(--dim); font-size: 12.5px; text-decoration: none; }
+      .src:hover { color: var(--fg); text-decoration: underline; }
+
+      footer {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 24px 56px;
+        color: #5a6270;
+        font-size: 12.5px;
+      }
+
+      footer a { color: #5a6270; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Gal's Arcade</h1>
+      <p>Small browser games I'm building. No install, no account — click and play.</p>
+    </header>
+
+    <main id="grid"></main>
+
+    <footer>Built by Gal. <a href="https://github.com/galmadar">github.com/galmadar</a></footer>
+
+    <script>
+      // Adding a game is one entry. `live: false` keeps it off the shelf entirely.
+      const GAMES = [
+        {
+          id: 'cranes-game',
+          name: 'Cranes Game',
+          blurb: 'Dig, push and lift real dirt with a dozer, a digger and a crawler crane.',
+          play: 'https://cranes-game.vercel.app',
+          source: 'https://github.com/galmadar/cranes-game',
+          shot: '',
+          live: true,
+          building: true,
+        },
+        {
+          id: 'rail-yard',
+          name: 'Rail Yard',
+          blurb: 'Shunt wagons: couple, cut and sort a train into the right sidings.',
+          play: '',
+          source: '',
+          shot: '',
+          live: false,
+          building: true,
+        },
+      ];
+
+      const grid = document.getElementById('grid');
+
+      for (const game of GAMES.filter((g) => g.live)) {
+        const card = document.createElement('article');
+        card.className = 'card';
+
+        const shotLink = document.createElement('a');
+        shotLink.href = game.play;
+
+        if (game.shot) {
+          const img = document.createElement('img');
+          img.className = 'shot';
+          img.src = game.shot;
+          img.alt = 'Screenshot of ' + game.name;
+          img.loading = 'lazy';
+          img.width = 1280;
+          img.height = 720;
+          shotLink.append(img);
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'shot shot--empty';
+          empty.textContent = 'screenshot coming';
+          shotLink.append(empty);
+        }
+
+        const body = document.createElement('div');
+        body.className = 'body';
+
+        const title = document.createElement('h2');
+        title.textContent = game.name;
+        if (game.building) {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = 'still building';
+          title.append(badge);
+        }
+
+        const blurb = document.createElement('p');
+        blurb.className = 'blurb';
+        blurb.textContent = game.blurb;
+
+        const actions = document.createElement('p');
+        actions.className = 'actions';
+
+        const play = document.createElement('a');
+        play.className = 'play';
+        play.href = game.play;
+        play.textContent = 'Play';
+        actions.append(play);
+
+        // Skip the link rather than render a dead one.
+        if (game.source) {
+          const src = document.createElement('a');
+          src.className = 'src';
+          src.href = game.source;
+          src.textContent = 'Source';
+          actions.append(src);
+        }
+
+        body.append(title, blurb, actions);
+        card.append(shotLink, body);
+        grid.append(card);
+      }
+    </script>
+  </body>
+</html>
