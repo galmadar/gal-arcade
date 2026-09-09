@@ -155,7 +155,10 @@
 
     <main id="grid"></main>
 
-    <footer>Built by Gal. <a href="https://github.com/galmadar">github.com/galmadar</a></footer>
+    <footer>
+      Built by Gal. <a href="https://github.com/galmadar">github.com/galmadar</a> ·
+      <a href="requests.html">Requests</a>
+    </footer>
 
     <script>
       // Adding a game is one entry. `live: false` keeps it off the shelf entirely.
@@ -240,6 +243,12 @@
           src.textContent = 'Source';
           actions.append(src);
         }
+
+        const ask = document.createElement('a');
+        ask.className = 'src';
+        ask.href = 'requests.html?game=' + game.id;
+        ask.textContent = 'Ask for something';
+        actions.append(ask);
 
         body.append(title, blurb, actions);
         card.append(shotLink, body);

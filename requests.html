@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Requests · Gal's Arcade</title>
+    <meta name="description" content="Ask for something, or say what's broken." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>&#127918;</text></svg>" />
+    <style>
+      /* Same palette as the shelf so this reads as part of the arcade. */
+      :root {
+        color-scheme: dark;
+        --bg: #0c0e12;
+        --card: rgba(255, 255, 255, 0.035);
+        --line: rgba(255, 255, 255, 0.09);
+        --fg: #e6e9ef;
+        --dim: #8b94a5;
+        --accent: #ffce54;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+
+      header, main, footer {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      header { padding-top: 56px; padding-bottom: 28px; }
+
+      h1 {
+        margin: 0;
+        font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      header p { margin: 14px 0 0; max-width: 52ch; color: var(--dim); }
+
+      header a { color: var(--dim); }
+
+      .form {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 20px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .row { display: flex; gap: 12px; flex-wrap: wrap; }
+      .row > label { flex: 1 1 200px; }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font: 600 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      select, input, textarea {
+        font: inherit;
+        color: var(--fg);
+        background: #12151b;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 11px;
+        width: 100%;
+      }
+
+      select:focus, input:focus, textarea:focus {
+        outline: none;
+        border-color: rgba(255, 206, 84, 0.45);
+      }
+
+      textarea { min-height: 92px; resize: vertical; }
+
+      .send {
+        justify-self: start;
+        background: var(--accent);
+        color: #0c0e12;
+        font: 650 13.5px/1 ui-sans-serif, system-ui, sans-serif;
+        padding: 11px 22px;
+        border: 0;
+        border-radius: 7px;
+        cursor: pointer;
+      }
+
+      .send:hover { background: #ffd977; }
+      .send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+      h2 {
+        margin: 44px 0 0;
+        font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      .list { display: grid; gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+
+      .req {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 15px 17px;
+      }
+
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        font: 600 9.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 2px 7px;
+        color: var(--fg);
+      }
+
+      .pill--bug { color: #ff9a8b; border-color: rgba(255, 154, 139, 0.4); }
+      .pill--idea { color: var(--accent); border-color: rgba(255, 206, 84, 0.4); }
+
+      .said { margin: 11px 0 0; white-space: pre-wrap; }
+
+      .drop {
+        margin-left: auto;
+        background: none;
+        border: 0;
+        color: #4c5462;
+        font: inherit;
+        font-size: 11px;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .drop:hover { color: #ff9a8b; }
+
+      .empty { margin: 18px 0 0; color: #5a6270; }
+
+      footer { padding: 44px 24px 56px; color: #5a6270; font-size: 12.5px; }
+      footer a { color: #5a6270; }
+
+      .note {
+        margin: 18px 0 0;
+        padding: 12px 15px;
+        border: 1px dashed rgba(255, 206, 84, 0.3);
+        border-radius: 10px;
+        color: var(--dim);
+        font-size: 12.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Requests</h1>
+      <p>
+        Something broken, or something you wish it did? Say so here.
+        <a href="/">Back to the games</a>.
+      </p>
+    </header>
+
+    <main>
+      <form class="form" id="form">
+        <div class="row">
+          <label>
+            Which game
+            <select id="game" required></select>
+          </label>
+          <label>
+            What kind
+            <select id="kind" required>
+              <option value="bug">Something's broken</option>
+              <option value="idea">I want something</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          What happened
+          <textarea id="said" required placeholder="The crane drops the load when I turn too fast."></textarea>
+        </label>
+
+        <label>
+          Your name
+          <input id="who" required placeholder="So we can ask you about it" autocomplete="name" />
+        </label>
+
+        <button class="send" type="submit">Send it</button>
+      </form>
+
+      <p class="note">
+        Prototype: these stay in this browser and go nowhere else. Nothing is sent to anyone yet.
+      </p>
+
+      <h2>What's been asked for</h2>
+      <ul class="list" id="list"></ul>
+      <p class="empty" id="empty" hidden>Nothing yet. Yours would be the first.</p>
+    </main>
+
+    <footer>Built by Gal. <a href="https://github.com/galmadar">github.com/galmadar</a></footer>
+
+    <script>
+      // The shelf in index.html is the real list; this copy keeps the prototype standalone.
+      const GAMES = [
+        { id: 'cranes-game', name: 'Cranes Game' },
+        { id: 'rail-yard', name: 'Rail Yard' },
+        { id: 'gal-arcade', name: 'The arcade itself' },
+      ];
+
+      const STORE = 'arcade-requests';
+      const WHO = 'arcade-who';
+
+      const form = document.getElementById('form');
+      const gameSel = document.getElementById('game');
+      const kindSel = document.getElementById('kind');
+      const said = document.getElementById('said');
+      const who = document.getElementById('who');
+      const list = document.getElementById('list');
+      const empty = document.getElementById('empty');
+
+      for (const game of GAMES) {
+        const opt = document.createElement('option');
+        opt.value = game.id;
+        opt.textContent = game.name;
+        gameSel.append(opt);
+      }
+
+      // Arriving from a game preselects it, so that field costs nothing.
+      const from = new URLSearchParams(location.search).get('game');
+      if (from && GAMES.some((g) => g.id === from)) gameSel.value = from;
+
+      // Asking for a name once is tolerable; asking every time is not.
+      who.value = read(WHO, '');
+
+      function read(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          return raw === null ? fallback : JSON.parse(raw);
+        } catch {
+          return fallback;
+        }
+      }
+
+      function write(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+          /* private window, or storage is off: the page still works, it just forgets. */
+        }
+      }
+
+      function nameOf(id) {
+        const game = GAMES.find((g) => g.id === id);
+        return game ? game.name : id;
+      }
+
+      function whenOf(iso) {
+        const days = Math.floor((Date.now() - new Date(iso)) / 86400000);
+        if (days < 1) return 'today';
+        if (days === 1) return 'yesterday';
+        return days + ' days ago';
+      }
+
+      function render() {
+        const requests = read(STORE, []);
+        list.replaceChildren();
+        empty.hidden = requests.length > 0;
+
+        for (const req of requests) {
+          const item = document.createElement('li');
+          item.className = 'req';
+
+          const meta = document.createElement('p');
+          meta.className = 'meta';
+
+          const kind = document.createElement('span');
+          kind.className = 'pill pill--' + req.kind;
+          kind.textContent = req.kind === 'bug' ? 'broken' : 'wanted';
+
+          const game = document.createElement('span');
+          game.textContent = nameOf(req.game);
+
+          const by = document.createElement('span');
+          by.textContent = req.who + ' · ' + whenOf(req.at);
+
+          const drop = document.createElement('button');
+          drop.className = 'drop';
+          drop.type = 'button';
+          drop.textContent = 'remove';
+          drop.addEventListener('click', () => {
+            write(STORE, read(STORE, []).filter((r) => r.id !== req.id));
+            render();
+          });
+
+          meta.append(kind, game, by, drop);
+
+          const body = document.createElement('p');
+          body.className = 'said';
+          body.textContent = req.said;
+
+          item.append(meta, body);
+          list.append(item);
+        }
+      }
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        const req = {
+          id: String(Date.now()),
+          game: gameSel.value,
+          kind: kindSel.value,
+          said: said.value.trim(),
+          who: who.value.trim(),
+          at: new Date().toISOString(),
+        };
+
+        if (!req.said || !req.who) return;
+
+        write(STORE, [req, ...read(STORE, [])]);
+        write(WHO, req.who);
+        said.value = '';
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
