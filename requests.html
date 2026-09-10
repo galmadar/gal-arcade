@@ -339,7 +339,7 @@
         { id: 'gal-arcade', name: 'The arcade itself' },
       ];
 
-      const STATES = ['new', 'being worked', 'done', 'declined'];
+      const STATES = ['new', 'in review', 'develop', 'done in production', 'declined'];
 
       // A hint per kind beats extra fields: it steers what people write without asking more of them.
       const HINTS = {
@@ -462,8 +462,8 @@
       }
 
       function renderState(req) {
-        // Gal moves a request by hand here. Once this is wired to GitHub, opening and
-        // merging a pull request will move it on its own.
+        // The board is its own record and tracks nothing on its own, so Gal needs a
+        // control to move a request by hand as he decides what happens to it.
         const select = document.createElement('select');
         select.className = 'state';
         select.title = 'Where this has got to';
