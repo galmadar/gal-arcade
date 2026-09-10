@@ -249,18 +249,10 @@
 
       .reply button:hover { border-color: rgba(255, 206, 84, 0.4); color: var(--fg); }
 
-      .drop {
-        margin-left: auto;
-        background: none;
-        border: 0;
-        color: #3f4653;
-        font: inherit;
-        font-size: 11px;
-        cursor: pointer;
-        padding: 0;
+      .vote[disabled], .send[disabled], .reply button[disabled], .state[disabled] {
+        opacity: 0.55;
+        cursor: default;
       }
-
-      .drop:hover { color: var(--broken); }
 
       .empty { margin: 18px 0 0; color: #5a6270; }
       footer { padding: 44px 24px 56px; color: #5a6270; font-size: 12.5px; }
@@ -273,6 +265,8 @@
         color: var(--dim);
         font-size: 12.5px;
       }
+
+      .note-box--bad { border-color: rgba(255, 154, 139, 0.45); color: var(--broken); }
     </style>
   </head>
   <body>
@@ -313,9 +307,7 @@
         <button class="send" type="submit">Send it</button>
       </form>
 
-      <p class="note-box">
-        Prototype: everything here stays in this browser. Nothing is sent to anyone yet.
-      </p>
+      <p class="note-box" id="trouble" hidden></p>
 
       <div class="bar">
         <h2>What's been asked for</h2>
@@ -332,14 +324,14 @@
     <footer>Built by Gal. <a href="https://github.com/galmadar">github.com/galmadar</a></footer>
 
     <script>
-      // The shelf in index.html is the real list; this copy keeps the prototype standalone.
+      // The shelf in index.html is the real list; this copy keeps the page standalone.
       const GAMES = [
         { id: 'cranes-game', name: 'Cranes Game' },
         { id: 'rail-yard', name: 'Rail Yard' },
         { id: 'gal-arcade', name: 'The arcade itself' },
       ];
 
-      const STATES = ['new', 'in review', 'develop', 'done in production', 'declined'];
+      const STATUSES = ['new', 'in review', 'develop', 'done in production', 'declined'];
 
       // A hint per kind beats extra fields: it steers what people write without asking more of them.
       const HINTS = {
@@ -347,10 +339,13 @@
         wanted: 'A horn on the loco would be great.',
       };
 
-      const STORE = 'arcade-requests';
+      // The board itself lives in the database now. Only what is truly this
+      // browser's — who you are, which browser this is, how you like it sorted,
+      // and Gal's password — is kept here.
       const WHO = 'arcade-who';
-      const VOTED = 'arcade-voted';
       const SORT = 'arcade-sort';
+      const BROWSER = 'arcade-browser';
+      const ADMIN = 'arcade-admin';
 
       const form = document.getElementById('form');
       const gameSel = document.getElementById('game');
@@ -360,6 +355,8 @@
       const list = document.getElementById('list');
       const empty = document.getElementById('empty');
       const sortBar = document.getElementById('sort');
+      const trouble = document.getElementById('trouble');
+      const send = form.querySelector('.send');
 
       function read(key, fallback) {
         try {
@@ -378,6 +375,29 @@
         }
       }
 
+      // Generated once and never shown to anyone: this random id is the whole of
+      // "one vote per browser", and the database indexes on it.
+      function browserId() {
+        const known = read(BROWSER, '');
+        if (known) return known;
+
+        const fresh =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+
+        write(BROWSER, fresh);
+        return fresh;
+      }
+
+      const me = browserId();
+
+      let admin = read(ADMIN, '');
+      let sortBy = read(SORT, 'votes') === 'new' ? 'new' : 'votes';
+      let rows = [];
+      let loaded = false;
+      const open = new Set();
+
       for (const game of GAMES) {
         const opt = document.createElement('option');
         opt.value = game.id;
@@ -385,15 +405,28 @@
         gameSel.append(opt);
       }
 
+      const params = new URLSearchParams(location.search);
+
       // Arriving from a game preselects it, so that field costs nothing.
-      const from = new URLSearchParams(location.search).get('game');
+      const from = params.get('game');
       if (from && GAMES.some((g) => g.id === from)) gameSel.value = from;
+
+      // Gal types his password once, at /requests.html?admin, and it stays in his
+      // browser. It travels as a header and appears nowhere in this page.
+      if (params.has('admin')) {
+        const typed = window.prompt('Password', admin);
+        if (typed !== null) {
+          admin = typed.trim();
+          write(ADMIN, admin);
+        }
+        params.delete('admin');
+        const rest = params.toString();
+        history.replaceState(null, '', location.pathname + (rest ? '?' + rest : ''));
+      }
 
       who.value = read(WHO, '');
       said.placeholder = HINTS[kindSel.value];
       kindSel.addEventListener('change', () => (said.placeholder = HINTS[kindSel.value]));
-
-      let sortBy = read(SORT, 'votes');
 
       function nameOf(id) {
         const game = GAMES.find((g) => g.id === id);
@@ -407,29 +440,73 @@
         return days + ' days ago';
       }
 
-      function save(rows) {
-        write(STORE, rows);
+      function say(message) {
+        trouble.textContent = message;
+        trouble.classList.add('note-box--bad');
+        trouble.hidden = false;
+      }
+
+      function quiet() {
+        trouble.hidden = true;
+      }
+
+      function post(payload, headers) {
+        return {
+          method: 'POST',
+          headers: Object.assign({ 'content-type': 'application/json' }, headers),
+          body: JSON.stringify(payload),
+        };
+      }
+
+      // Every failure has to end up as a sentence someone can read, so nothing
+      // here is allowed to reject with a stack trace or leave the page blank.
+      async function api(path, options) {
+        let res;
+        try {
+          res = await fetch(path, options);
+        } catch {
+          throw new Error("The board isn't answering. Check your connection and try again.");
+        }
+
+        let payload = null;
+        try {
+          payload = await res.json();
+        } catch {
+          /* an error page instead of JSON: the status code is all we have to go on. */
+        }
+
+        if (!res.ok) {
+          const error = new Error(
+            (payload && payload.error) || 'The board answered with an error (' + res.status + ').',
+          );
+          error.status = res.status;
+          throw error;
+        }
+
+        return payload;
+      }
+
+      async function load() {
+        try {
+          const data = await api(
+            '/api/requests?sort=' + encodeURIComponent(sortBy) + '&browser=' + encodeURIComponent(me),
+          );
+          rows = data.requests;
+          loaded = true;
+          quiet();
+        } catch (error) {
+          say(error.message);
+        }
+
         render();
       }
 
-      // One vote per browser: the set of ids this browser has voted for is the whole record.
-      function myVotes() {
-        return new Set(read(VOTED, []));
-      }
-
-      function sorted(requests) {
-        const rows = requests.slice();
-        if (sortBy === 'votes') rows.sort((a, b) => b.votes - a.votes || (a.at < b.at ? 1 : -1));
-        else rows.sort((a, b) => (a.at < b.at ? 1 : -1));
-        return rows;
-      }
-
-      function renderVote(req, voted) {
+      function renderVote(req) {
         const button = document.createElement('button');
         button.className = 'vote';
         button.type = 'button';
-        button.setAttribute('aria-pressed', String(voted));
-        button.title = voted ? 'Take my vote back' : 'I want this too';
+        button.setAttribute('aria-pressed', String(req.voted));
+        button.title = req.voted ? 'Take my vote back' : 'I want this too';
 
         const n = document.createElement('span');
         n.className = 'n';
@@ -440,47 +517,68 @@
         cap.textContent = 'votes';
 
         button.append(n, cap);
-        button.addEventListener('click', () => {
-          const mine = myVotes();
-          const rows = requests();
-          const row = rows.find((r) => r.id === req.id);
-          if (!row) return;
-
-          if (mine.has(req.id)) {
-            mine.delete(req.id);
-            row.votes = Math.max(0, row.votes - 1);
-          } else {
-            mine.add(req.id);
-            row.votes += 1;
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            if (req.voted) {
+              const query =
+                '?request=' + encodeURIComponent(req.id) + '&browser=' + encodeURIComponent(me);
+              await api('/api/votes' + query, { method: 'DELETE' });
+            } else {
+              await api('/api/votes', post({ request_id: req.id, browser_id: me }));
+            }
+            await load();
+          } catch (error) {
+            say(error.message);
+            button.disabled = false;
           }
-
-          write(VOTED, [...mine]);
-          save(rows);
         });
 
         return button;
       }
 
-      function renderState(req) {
-        // The board is its own record and tracks nothing on its own, so Gal needs a
-        // control to move a request by hand as he decides what happens to it.
+      function renderStatus(req) {
+        // Everyone reads where a request has got to; only Gal can move it, and the
+        // control simply does not exist for anyone else.
+        if (!admin) {
+          const label = document.createElement('span');
+          label.className = 'state';
+          label.textContent = req.status;
+          return label;
+        }
+
         const select = document.createElement('select');
         select.className = 'state';
         select.title = 'Where this has got to';
 
-        for (const state of STATES) {
+        for (const status of STATUSES) {
           const opt = document.createElement('option');
-          opt.value = state;
-          opt.textContent = state;
+          opt.value = status;
+          opt.textContent = status;
           select.append(opt);
         }
 
-        select.value = req.state;
-        select.addEventListener('change', () => {
-          const rows = requests();
-          const row = rows.find((r) => r.id === req.id);
-          if (row) row.state = select.value;
-          save(rows);
+        select.value = req.status;
+        select.addEventListener('change', async () => {
+          select.disabled = true;
+          try {
+            await api(
+              '/api/status',
+              post({ request_id: req.id, status: select.value }, { 'x-admin-password': admin }),
+            );
+            await load();
+          } catch (error) {
+            say(error.message);
+            select.value = req.status;
+            select.disabled = false;
+
+            // A rejected password is worth forgetting, or every card keeps a control that cannot work.
+            if (error.status === 401) {
+              admin = '';
+              write(ADMIN, '');
+              render();
+            }
+          }
         });
 
         return select;
@@ -490,24 +588,32 @@
         const talk = document.createElement('details');
         talk.className = 'talk';
 
+        // The list is redrawn from the board after every change, so an open thread
+        // has to remember it was open.
+        talk.open = open.has(req.id);
+        talk.addEventListener('toggle', () => {
+          if (talk.open) open.add(req.id);
+          else open.delete(req.id);
+        });
+
         const summary = document.createElement('summary');
-        const count = req.notes.length;
+        const count = req.comments.length;
         summary.textContent = count === 0 ? 'Add a note' : count === 1 ? '1 note' : count + ' notes';
         talk.append(summary);
 
         const notes = document.createElement('ul');
         notes.className = 'notes';
 
-        for (const note of req.notes) {
+        for (const note of req.comments) {
           const item = document.createElement('li');
           item.className = 'note';
 
           const heading = document.createElement('span');
           heading.className = 'who';
-          heading.textContent = note.who + ' · ' + whenOf(note.at);
+          heading.textContent = note.author + ' · ' + whenOf(note.created_at);
 
           const body = document.createElement('p');
-          body.textContent = note.text;
+          body.textContent = note.body;
 
           item.append(heading, body);
           notes.append(item);
@@ -520,54 +626,46 @@
         field.placeholder = 'Add a note';
         field.setAttribute('aria-label', 'Add a note');
 
-        const send = document.createElement('button');
-        send.type = 'submit';
-        send.textContent = 'Add';
+        const add = document.createElement('button');
+        add.type = 'submit';
+        add.textContent = 'Add';
 
-        reply.append(field, send);
-        reply.addEventListener('submit', (event) => {
+        reply.append(field, add);
+        reply.addEventListener('submit', async (event) => {
           event.preventDefault();
+
           const text = field.value.trim();
           const name = who.value.trim();
-          if (!text || !name) return;
+          if (!text || !name) {
+            say('A note needs your name and something to say.');
+            return;
+          }
 
-          const rows = requests();
-          const row = rows.find((r) => r.id === req.id);
-          if (!row) return;
-
-          row.notes.push({ who: name, text, at: new Date().toISOString() });
-          write(WHO, name);
-          save(rows);
+          add.disabled = true;
+          try {
+            await api('/api/comments', post({ request_id: req.id, author: name, body: text }));
+            write(WHO, name);
+            open.add(req.id);
+            await load();
+          } catch (error) {
+            say(error.message);
+            add.disabled = false;
+          }
         });
 
         talk.append(notes, reply);
         return talk;
       }
 
-      // Requests filed before votes and notes existed are missing those fields, and
-      // used the older 'bug'/'idea' kinds. Fill them in rather than break on them.
-      function requests() {
-        return read(STORE, []).map((req) => ({
-          ...req,
-          kind: req.kind === 'bug' ? 'broken' : req.kind === 'idea' ? 'wanted' : req.kind,
-          state: STATES.includes(req.state) ? req.state : 'new',
-          votes: Number.isFinite(req.votes) ? req.votes : 0,
-          notes: Array.isArray(req.notes) ? req.notes : [],
-        }));
-      }
-
       function render() {
-        const rows = requests();
-        const mine = myVotes();
-
         list.replaceChildren();
-        empty.hidden = rows.length > 0;
+        empty.hidden = !loaded || rows.length > 0;
 
         for (const button of sortBar.querySelectorAll('button')) {
           button.setAttribute('aria-pressed', String(button.dataset.sort === sortBy));
         }
 
-        for (const req of sorted(rows)) {
+        for (const req of rows) {
           const item = document.createElement('li');
           item.className = 'req';
 
@@ -576,29 +674,21 @@
 
           const kind = document.createElement('span');
           kind.className = 'pill pill--' + req.kind;
-          kind.textContent = req.kind === 'broken' ? 'broken' : 'wanted';
+          kind.textContent = req.kind;
 
           const game = document.createElement('span');
           game.textContent = nameOf(req.game);
 
           const by = document.createElement('span');
-          by.textContent = req.who + ' · ' + whenOf(req.at);
+          by.textContent = req.author + ' · ' + whenOf(req.created_at);
 
-          const drop = document.createElement('button');
-          drop.className = 'drop';
-          drop.type = 'button';
-          drop.textContent = 'remove';
-          drop.addEventListener('click', () => {
-            save(requests().filter((r) => r.id !== req.id));
-          });
-
-          meta.append(kind, game, by, renderState(req), drop);
+          meta.append(kind, game, by, renderStatus(req));
 
           const body = document.createElement('p');
           body.className = 'said';
-          body.textContent = req.said;
+          body.textContent = req.body;
 
-          item.append(renderVote(req, mine.has(req.id)), meta, body, renderTalk(req));
+          item.append(renderVote(req), meta, body, renderTalk(req));
           list.append(item);
         }
       }
@@ -606,34 +696,38 @@
       sortBar.addEventListener('click', (event) => {
         const button = event.target.closest('button');
         if (!button) return;
+
         sortBy = button.dataset.sort;
         write(SORT, sortBy);
         render();
+        load();
       });
 
-      form.addEventListener('submit', (event) => {
+      form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        const req = {
-          id: String(Date.now()),
-          game: gameSel.value,
-          kind: kindSel.value,
-          said: said.value.trim(),
-          who: who.value.trim(),
-          at: new Date().toISOString(),
-          state: 'new',
-          votes: 0,
-          notes: [],
-        };
+        const text = said.value.trim();
+        const name = who.value.trim();
+        if (!text || !name) return;
 
-        if (!req.said || !req.who) return;
+        send.disabled = true;
+        try {
+          await api(
+            '/api/requests',
+            post({ game: gameSel.value, kind: kindSel.value, body: text, author: name }),
+          );
+          write(WHO, name);
+          said.value = '';
+          await load();
+        } catch (error) {
+          // What was typed stays in the box: a failed send must not lose it.
+          say(error.message);
+        }
 
-        write(WHO, req.who);
-        save([req, ...requests()]);
-        said.value = '';
+        send.disabled = false;
       });
 
-      render();
+      load();
     </script>
   </body>
 </html>
