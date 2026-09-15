@@ -6,7 +6,7 @@ export const KINDS = ['broken', 'wanted'];
 export const STATUSES = ['new', 'in review', 'develop', 'done in production', 'declined'];
 
 // Same list as GAMES in requests.html; a new game goes in both.
-export const GAMES = ['cranes-game', 'rail-yard', 'maze-game', 'gal-arcade'];
+export const GAMES = ['cranes-game', 'laser-bounce', 'rail-yard', 'maze-game', 'gal-arcade'];
 
 // The page is public, so every length is a rule here, not a maxlength attribute.
 export const LIMITS = { game: 40, body: 2000, author: 60, comment: 1000, browser: 100 };
