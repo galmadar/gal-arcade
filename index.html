@@ -156,7 +156,7 @@
     <main id="grid"></main>
 
     <footer>
-      Built by Gal. <a href="https://github.com/galmadar">github.com/galmadar</a> ·
+      Built by Gal. <a href="https://github.com/galmadar" target="_blank" rel="noopener noreferrer">github.com/galmadar</a> ·
       <a href="requests.html">Requests</a>
     </footer>
 
@@ -213,6 +213,8 @@
 
         const shotLink = document.createElement('a');
         shotLink.href = game.play;
+        shotLink.target = '_blank';
+        shotLink.rel = 'noopener noreferrer';
 
         if (game.shot) {
           const img = document.createElement('img');
@@ -252,6 +254,8 @@
         const play = document.createElement('a');
         play.className = 'play';
         play.href = game.play;
+        play.target = '_blank';
+        play.rel = 'noopener noreferrer';
         play.textContent = 'Play';
         actions.append(play);
 
@@ -260,6 +264,8 @@
           const src = document.createElement('a');
           src.className = 'src';
           src.href = game.source;
+          src.target = '_blank';
+          src.rel = 'noopener noreferrer';
           src.textContent = 'Source';
           actions.append(src);
         }
