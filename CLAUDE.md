@@ -4,9 +4,13 @@ The front door to Gal's browser games: one static `index.html`, no build step,
 no dependencies. Deployed to gal-arcade.vercel.app. Each game it links to is a
 separate repo with its own Vercel deployment.
 
-The shelf itself is the `GAMES` array near the bottom of `index.html`; adding a
-game means adding an entry there. See `README.md` for the field shapes and the
-`shots/` folder rule.
+The shelf itself is the `GAMES` array near the bottom of `index.html`. Adding a
+game means three places: that array, the `GAMES` list in `requests.html`, and
+`GAMES` in `api/_db.js` (the request form's allowlist). See `README.md` for the
+field shapes and the `shots/` folder rule.
+
+Gotcha: `maze-game.vercel.app` belongs to a stranger. Gal's Maze Run lives at
+`maze-game-jet-psi.vercel.app`; never use the bare URL.
 
 ## Agent skills
 
